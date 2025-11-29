@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import Header from './components/Header';
 import { generateWallpapers } from './services/geminiService';
 import { GeneratedImage } from './types';
@@ -6,11 +6,31 @@ import ImageViewer from './components/ImageViewer';
 import { LoadingSpinner } from './components/LoadingSpinner';
 
 const App: React.FC = () => {
+  const [hasKey, setHasKey] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [images, setImages] = useState<GeneratedImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
+
+  // Check for API key on mount
+  useEffect(() => {
+    const checkKey = async () => {
+      if (window.aistudio && window.aistudio.hasSelectedApiKey) {
+        const has = await window.aistudio.hasSelectedApiKey();
+        setHasKey(has);
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleSelectKey = async () => {
+    if (window.aistudio && window.aistudio.openSelectKey) {
+      await window.aistudio.openSelectKey();
+      // Assume success to mitigate race condition
+      setHasKey(true);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -23,7 +43,15 @@ const App: React.FC = () => {
       const generatedImages = await generateWallpapers(prompt);
       setImages(generatedImages);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.');
+      const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류가 발생했습니다.';
+      
+      // Handle "Requested entity was not found" error by resetting key state
+      if (errorMessage.includes("Requested entity was not found")) {
+        setHasKey(false);
+        setError("API Key 연결이 끊어졌습니다. 다시 연결해주세요.");
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -37,6 +65,50 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // If no key is selected, show the Key Selection Landing Page
+  if (!hasKey) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] text-white font-sans flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-sm w-full space-y-8 animate-fade-in">
+          <div>
+            <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-300 mb-2">
+              SoulPaper
+            </h1>
+            <p className="text-slate-400">
+              감성적인 AI 배경화면 생성기
+            </p>
+          </div>
+
+          <div className="bg-slate-800/50 p-6 rounded-2xl border border-slate-700">
+            <p className="text-sm text-slate-300 mb-6 leading-relaxed">
+              고화질 이미지 생성을 위해<br/>
+              Google Cloud 프로젝트의 API Key가 필요합니다.
+            </p>
+            
+            <button
+              onClick={handleSelectKey}
+              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-purple-900/30 hover:shadow-purple-900/50 active:scale-95 transition-all"
+            >
+              API Key 연결하기
+            </button>
+            
+            <p className="mt-4 text-xs text-slate-500">
+              <a 
+                href="https://ai.google.dev/gemini-api/docs/billing" 
+                target="_blank" 
+                rel="noreferrer"
+                className="underline hover:text-slate-400"
+              >
+                Billing 관련 문서 보기
+              </a>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main App Interface
   return (
     <div className="min-h-screen bg-[#0f172a] text-white font-sans selection:bg-purple-500 selection:text-white">
       <div className="max-w-md mx-auto min-h-screen flex flex-col relative pb-safe">
@@ -74,6 +146,15 @@ const App: React.FC = () => {
           {error && (
             <div className="mt-3 text-red-400 text-sm text-center bg-red-900/20 py-2 rounded-lg border border-red-900/50">
               {error}
+              {/* If error is related to auth, offer re-selection */}
+              {error.includes("API Key") && (
+                 <button 
+                   onClick={handleSelectKey}
+                   className="ml-2 underline hover:text-red-300 font-bold"
+                 >
+                   다시 연결
+                 </button>
+              )}
             </div>
           )}
         </div>

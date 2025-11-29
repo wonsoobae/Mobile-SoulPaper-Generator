@@ -1,9 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { GeneratedImage } from "../types";
 
-const apiKey = process.env.API_KEY;
-const ai = new GoogleGenAI({ apiKey: apiKey });
-
 // Using gemini-3-pro-image-preview for high quality wallpapers
 const MODEL_NAME = 'gemini-3-pro-image-preview';
 
@@ -11,6 +8,9 @@ const MODEL_NAME = 'gemini-3-pro-image-preview';
  * Generates a single image based on the prompt.
  */
 async function generateSingleImage(prompt: string, seedOffset: number): Promise<string> {
+  // Initialize AI client inside the function to ensure it uses the currently selected API Key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   try {
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
@@ -24,7 +24,6 @@ async function generateSingleImage(prompt: string, seedOffset: number): Promise<
         },
         // Adding a slight variation to the system instruction or seed if supported 
         // to ensure 4 distinct images, though the model is naturally non-deterministic.
-        // We simulate "seed" variance by appending invisible noise or trusting temperature.
         temperature: 1.0, 
       }
     });
